@@ -11,6 +11,8 @@
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.SocketException;
 import java.util.concurrent.CountDownLatch;
 
@@ -80,13 +82,49 @@ public abstract class Node {
 	/* Controller Status async message. */
 	static final byte OFPT_CONTROLLER_STATUS = 35;
 	
-	static final byte FEATURES_POS = 1;
-
 	static final byte BASIC_FEATURES = 36;
 
+	static final byte END_NODE_SEND_MESSAGE = 37;
+
+	static final byte FEATURES_POS = 1;
+	
 	static final int PACKETSIZE = 65536;
 
-	DatagramSocket socket;
+	static final int CONTROLLER_PORT = 50001;
+	static final int SWITCH_PORT = 50002;
+	static final int END_NODE_PORT = 50005;
+	
+	DatagramSocket socket;				
+	
+	static final int HEADER_LENGTH = 2; // Fixed length of the header
+	static final int TYPE_POS = 0; // Position of the type within the header
+
+	static final byte TYPE_UNKNOWN = 0;
+
+	static final int LENGTH_POS = 1;
+	
+	static final int ACKCODE_POS = 1; // Position of the acknowledgement type in the header
+	static final byte ACK_ALLOK = 10; // Indicating that everything is ok
+
+	static final byte TYPE_ACK = 7;   // Indicating an acknowledgement
+	
+	static final byte E1 = 1;
+	static final byte R1 = 2;		// switch 1
+	static final byte R2 = 3;		// switch 2
+	static final byte R4 = 4;		// switch 3
+	static final byte E4 = 5;
+	
+	static final String E1_HOST_NAME = "E1.cs2031";
+	static final String R1_HOST_NAME = "R1.cs2031";		// switch 1
+	static final String R2_HOST_NAME = "R2.cs2031";		// switch 2
+	static final String R4_HOST_NAME = "R4.cs2031";		// switch 3
+	static final String E4_HOST_NAME = "E4.cs2031";
+	static final String TRINITY = "trinity";
+	
+//	static final int NUMBER_OF_SWITCHES = 3;
+		
+	InetSocketAddress dstAddress;
+	
 	Listener listener;
 	CountDownLatch latch;
 
