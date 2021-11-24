@@ -24,8 +24,18 @@ public class Controller extends Node {
 
 	Scanner scanner;
 
-	private static byte[][] flowTables;
-
+//	private static byte[][] flowTables;
+	private static String[][] preconfiguredInformation = 
+			/* 	Dest, 		Src, 			Router, 			In, 			Out	*/
+		{ 
+				{E4_HOST_NAME, 	E1_HOST_NAME, 	R1_HOST_NAME, 		E1_HOST_NAME, 	R2_HOST_NAME},
+				{E4_HOST_NAME, 	E1_HOST_NAME, 	R2_HOST_NAME, 		R1_HOST_NAME, 	R4_HOST_NAME},
+				{E4_HOST_NAME, 	E1_HOST_NAME, 	R4_HOST_NAME, 		R2_HOST_NAME, 	E4_HOST_NAME},
+				{E1_HOST_NAME, 	E4_HOST_NAME, 	R4_HOST_NAME, 		E4_HOST_NAME, 	R2_HOST_NAME},
+				{E1_HOST_NAME, 	E4_HOST_NAME, 	R2_HOST_NAME, 		R4_HOST_NAME, 	R1_HOST_NAME},
+				{E1_HOST_NAME, 	E4_HOST_NAME, 	R1_HOST_NAME, 		R2_HOST_NAME, 	E1_HOST_NAME},
+		};
+	
 	Controller (int port) {
 		try {
 			this.socket = new DatagramSocket(port);
@@ -61,6 +71,16 @@ public class Controller extends Node {
 				else {
 					System.out.println("Features are: Not basic Features");	
 				}
+				sendFlowMod(packet);
+				break;	
+				
+			case TYPE_ACK:
+				System.out.println("Controller received ACK from Switch for flow mod message");
+				break;
+				
+			case OFPT_PACKET_IN:
+				System.out.println("Controller was contacted by Switch for unrecognised packet");
+				System.out.println("Controller tells switch to drop packet, there is no path");
 				break;	
 				
 			default:
@@ -100,40 +120,52 @@ public class Controller extends Node {
 
 	}
 
+	public synchronized void sendFlowMod(DatagramPacket packet) {
+		String flowTableModificationMessage = getFlowTableModificationMessage(packet);
+		byte[] buffer = flowTableModificationMessage.getBytes();
+		byte[] data = new byte[HEADER_LENGTH+buffer.length];
+		data[TYPE_POS] = OFPT_FLOW_MOD;
+		data[LENGTH_POS] = (byte) buffer.length;
+		/* copy buffer content into data content */
+		System.arraycopy(buffer, 0, data, HEADER_LENGTH, buffer.length);
+		DatagramPacket flowModPacket = new DatagramPacket(data, data.length);
+		SocketAddress srcAddress = packet.getSocketAddress();
+		flowModPacket.setSocketAddress(srcAddress);
+		try {
+			socket.send(flowModPacket);
+			System.out.println("Flow mod sent from Controller");
+		} catch(IOException e) {
+			e.printStackTrace();
+		}
+	}	
+	
+	public synchronized String getFlowTableModificationMessage(DatagramPacket packet) {
+		StringBuilder builder = new StringBuilder();
+		String entry = "";
+		int columnIndex = 2;
+		String ipAddress = packet.getAddress().getHostName();
+		for(int i=0; i<preconfiguredInformation.length; i++) {
+			entry = preconfiguredInformation[i][columnIndex];
+			if(ipAddress.equalsIgnoreCase(entry)) {
+				if(builder.length()!=0) {
+					builder.append(",");
+				}
+				for(int j=0; j<preconfiguredInformation[i].length-1; j++) {
+					String flowTableElement = preconfiguredInformation[i][j];
+					builder.append(flowTableElement);
+					builder.append(",");
+				}
+				builder.append(preconfiguredInformation[i][preconfiguredInformation[i].length-1]);
+			}
+		}
+		String modificationMessage = builder.toString();
+		return modificationMessage;
+	}
+	
 	public synchronized void start() throws Exception {
 		System.out.println("Controller waiting for contact");
 		this.wait();
 	}
-
-	/**
-	 * ACK Sender Method
-	 *
-	 */
-//	public synchronized String sendACK(DatagramPacket packet, byte[] data) throws Exception {
-//		try {
-//			String content;
-//
-//			byte[] buffer = new byte[data[LENGTH_POS]];
-//			buffer= new byte[data[LENGTH_POS]];
-//			System.arraycopy(data, HEADER_LENGTH, buffer, 0, buffer.length);
-//
-//			content= new String(buffer);
-//
-//			data = new byte[HEADER_LENGTH];
-//			data[TYPE_POS] = TYPE_ACK;
-//			data[ACKCODE_POS] = ACK_ALLOK;
-//
-//			DatagramPacket response;
-//			response = new DatagramPacket(data, data.length);
-//			response.setSocketAddress(packet.getSocketAddress());
-//			socket.send(response);
-//			System.out.println("ACK sent from Controller");
-//			return content;
-//		} catch(Exception e) {
-//			e.printStackTrace();
-//		}
-//		return "";
-//	}
 
 	public static void main(String[] args) {
 		try {

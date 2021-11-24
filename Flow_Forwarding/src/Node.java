@@ -103,9 +103,6 @@ public abstract class Node {
 
 	static final int LENGTH_POS = 1;
 	
-	static final int ACKCODE_POS = 1; // Position of the acknowledgement type in the header
-	static final byte ACK_ALLOK = 10; // Indicating that everything is ok
-
 	static final byte TYPE_ACK = 7;   // Indicating an acknowledgement
 	
 	static final byte E1 = 1;
@@ -120,6 +117,9 @@ public abstract class Node {
 	static final String R4_HOST_NAME = "R4.cs2031";		// switch 3
 	static final String E4_HOST_NAME = "E4.cs2031";
 	static final String TRINITY = "trinity";
+	
+	static final InetSocketAddress R1_ADDRESS = new InetSocketAddress(R1_HOST_NAME, SWITCH_PORT);
+	static final InetSocketAddress R4_ADDRESS = new InetSocketAddress(R4_HOST_NAME, SWITCH_PORT);
 	
 //	static final int NUMBER_OF_SWITCHES = 3;
 		

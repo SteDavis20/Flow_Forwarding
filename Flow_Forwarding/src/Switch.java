@@ -17,6 +17,13 @@
 	The routers then contact the controller for the next hop.
  */
 
+/* Router contacts the controller with an initial Hello message
+ * Router receives a modification message to its flow table.
+ * Router replies to this with an acknowledgement.
+ * When a router receives a packet with an unknown destination, it will contact the controller and receive an additional modification to its
+ * flow table.
+ */
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -48,14 +55,14 @@ public class Switch extends Node {
 	Scanner scanner;
 	InetSocketAddress dstAddress;
 
-	private static String[][] flowTable;
-	private static String[][] preconfiguredInformation = 
-			/* 	Dest, 		Src, 	Router, 	In, 	Out	*/
-		{ 
-				{TRINITY, 	E1_HOST_NAME, 	R1_HOST_NAME, 		E1_HOST_NAME, 	R2_HOST_NAME},
-				{TRINITY, 	E1_HOST_NAME, 	R2_HOST_NAME, 		R1_HOST_NAME, 	R4_HOST_NAME},
-				{TRINITY, 	E1_HOST_NAME, 	R4_HOST_NAME, 		R2_HOST_NAME, 	E4_HOST_NAME},
-		};
+	private String[][] flowTable;
+	//	private static String[][] preconfiguredInformation = 
+	/* 				Dest, 		Src, 			Router, 			In, 			Out	*/
+	//		{ 
+	//				{TRINITY, 	E1_HOST_NAME, 	R1_HOST_NAME, 		E1_HOST_NAME, 	R2_HOST_NAME},
+	//				{TRINITY, 	E1_HOST_NAME, 	R2_HOST_NAME, 		R1_HOST_NAME, 	R4_HOST_NAME},
+	//				{TRINITY, 	E1_HOST_NAME, 	R4_HOST_NAME, 		R2_HOST_NAME, 	E4_HOST_NAME},
+	//		};
 
 	Switch (int port) {
 		try {
@@ -63,7 +70,7 @@ public class Switch extends Node {
 			listener.go();
 			scanner = new Scanner(System.in);
 			dstAddress = new InetSocketAddress("Controller", CONTROLLER_PORT);
-			flowTable = preconfiguredInformation;				// 1 row, 3 columns
+			flowTable = new String[2][5];				// 1 row, 5 columns
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
@@ -91,6 +98,7 @@ public class Switch extends Node {
 			case OFPT_FLOW_MOD:
 				System.out.println("Switch received flow mod from controller");
 				content = sendACK(packet, data);
+				updateFlowTable(content, packet);
 				break;	
 
 			case END_NODE_SEND_MESSAGE:
@@ -138,14 +146,17 @@ public class Switch extends Node {
 			src_host_name=E4_HOST_NAME;
 		}
 		String destNode = "";
-		for(int i=0; i<preconfiguredInformation.length; i++) {
-			if(preconfiguredInformation[i][3].equalsIgnoreCase(src_host_name)) {
-				destNode=preconfiguredInformation[i][4];
+		for(int i=0; i<flowTable.length; i++) {
+			if(flowTable[i][3].equalsIgnoreCase(src_host_name)) {
+				destNode=flowTable[i][4];
 				break;
 			}
 		}
+		if(destNode.equalsIgnoreCase("")) {
+			return null;
+		}
 		int port = SWITCH_PORT;
-		if(destNode.equalsIgnoreCase(E4_HOST_NAME)) {
+		if(destNode.equalsIgnoreCase(E4_HOST_NAME) || destNode.equalsIgnoreCase(E1_HOST_NAME)) {
 			port = END_NODE_PORT;
 		}
 		System.out.println("Container destination name: "+destNode);
@@ -156,16 +167,70 @@ public class Switch extends Node {
 	public synchronized void forwardPacket(DatagramPacket packet) {
 		// check forwardingTable for destination address etc.	
 		InetSocketAddress destAddress = lookUpTable(packet);
-		packet.setSocketAddress(destAddress);
+		if(destAddress==null) {
+			System.out.println("Flow table does not have next hop");
+			contactController(packet);
+		}
+		else {
+			packet.setSocketAddress(destAddress);
+			try {
+				socket.send(packet);
+				System.out.println("Packet forwarded from Switch");
+			} catch(Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	public synchronized void contactController(DatagramPacket packet) {
+		byte[] data = packet.getData();
+		data[TYPE_POS] = OFPT_PACKET_IN;
+		DatagramPacket packetIn = new DatagramPacket(data, data.length);
+		packetIn.setSocketAddress(dstAddress);
 		try {
-			socket.send(packet);
-			System.out.println("Packet forwarded from Switch");
+			socket.send(packetIn);
+			System.out.println("Switch contacted Controller for unrecognised packet");
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
-
 	}
 	
+	public synchronized void updateFlowTable(String tableEntry, DatagramPacket packet) {
+		String[] rowContents = tableEntry.split(",");
+		int i=0;
+		System.out.println("Flow table before: ");
+		printFlowTable();
+		for(int k=0; k<flowTable.length; k++) {
+			for(int l=0; l<flowTable[0].length; l++) {
+				
+			}
+		}
+		for(i=0; i<flowTable[0].length; i++) {
+			rowContents[i].trim();
+			flowTable[0][i] = rowContents[i];
+		}
+		for(int j=0; j<flowTable[0].length; j++) {
+			rowContents[i].trim();
+			flowTable[1][j] = rowContents[i];
+			i++;
+		}
+		System.out.println("Flow table after: ");
+		printFlowTable();
+	}
+	
+	public synchronized void printFlowTable() {
+		StringBuilder builder = new StringBuilder();
+		for(int i=0; i<flowTable.length; i++) {
+			for(int j=0; j<flowTable[0].length; j++) {
+				builder.append(flowTable[i][j]);
+				builder.append("  ");
+			}
+			builder.append("\n");
+		}
+		String flowTablePrinted = builder.toString();
+		System.out.println(flowTablePrinted);
+	} 
+
 	/* switch eplies with a features reply message that specifies the features and capabilities that are supported by the switch */
 	public synchronized void replyToFeaturesRequest(SocketAddress srcAddress) {			
 		byte[] data = new byte[HEADER_LENGTH];
@@ -190,14 +255,13 @@ public class Switch extends Node {
 			String content;
 
 			byte[] buffer = new byte[data[LENGTH_POS]];
-			buffer= new byte[data[LENGTH_POS]];
 			System.arraycopy(data, HEADER_LENGTH, buffer, 0, buffer.length);
 
 			content= new String(buffer);
 
 			data = new byte[HEADER_LENGTH];
 			data[TYPE_POS] = TYPE_ACK;
-			data[ACKCODE_POS] = ACK_ALLOK;
+			data[LENGTH_POS] = 0;
 
 			DatagramPacket response;
 			response = new DatagramPacket(data, data.length);
@@ -209,11 +273,6 @@ public class Switch extends Node {
 			e.printStackTrace();
 		}
 		return "";
-	}
-
-	public static void requestNextHop() {
-
-
 	}
 
 	public synchronized void start() throws Exception {

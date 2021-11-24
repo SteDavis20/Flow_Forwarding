@@ -26,6 +26,7 @@ import java.util.Scanner;
 
 public class EndNode extends Node {	
 
+	private String function;
 	static Scanner scanner; 
 
 	EndNode (int port) {
@@ -33,7 +34,6 @@ public class EndNode extends Node {
 			socket = new DatagramSocket(port);
 			listener.go();
 			scanner = new Scanner(System.in);
-			dstAddress = new InetSocketAddress(R1_HOST_NAME, SWITCH_PORT);
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
@@ -45,13 +45,13 @@ public class EndNode extends Node {
 			byte[] data;
 			data = packet.getData();			
 			String content;
-			//			SocketAddress srcAddress = packet.getSocketAddress();
 
 			switch(data[TYPE_POS]) {
 
 			case END_NODE_SEND_MESSAGE:
 				content = getPacketMessage(packet);
 				System.out.println("Target end node received message from start end node.\nMessage was: "+content);
+				this.notify();
 				break;	
 
 			default:
@@ -80,7 +80,7 @@ public class EndNode extends Node {
 		byte[] data = new byte[HEADER_LENGTH+buffer.length];
 		data[TYPE_POS] = END_NODE_SEND_MESSAGE;
 		data[LENGTH_POS] = (byte) buffer.length;
-		
+
 		System.arraycopy(buffer, 0, data, HEADER_LENGTH, buffer.length);
 
 		DatagramPacket packet = new DatagramPacket(data, data.length);
@@ -94,13 +94,18 @@ public class EndNode extends Node {
 	}
 
 
-	public synchronized void start(String function) throws Exception {
-		if(function.equalsIgnoreCase("send")) {
-			sendMessage(dstAddress);
-		}
-		else if(function.equalsIgnoreCase("wait")) {
-			System.out.println("EndNode waiting for contact");
-			this.wait();
+	public synchronized void start() throws Exception {
+		while(true) {
+			if(this.function.equalsIgnoreCase("send")) {
+				sendMessage(R1_ADDRESS);
+				System.out.println("EndNode waiting for contact");
+				this.wait();
+			}
+			else if(this.function.equalsIgnoreCase("wait")) {
+				System.out.println("EndNode waiting for contact");
+				this.wait();
+				sendMessage(R4_ADDRESS);
+			}
 		}
 	}
 
@@ -110,7 +115,8 @@ public class EndNode extends Node {
 			Scanner scanner = new Scanner(System.in);
 			System.out.println("Will this end node send or wait? ");
 			String input = scanner.nextLine();
-			e1.start(input);
+			e1.function=input;
+			e1.start();
 			scanner.close();
 		} catch(Exception e) {
 			e.printStackTrace();
